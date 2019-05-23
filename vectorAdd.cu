@@ -22,7 +22,7 @@
 
 // For the CUDA runtime routines (prefixed with "cuda_")
 #include <cuda_runtime.h>
-#include <cuda_helper.h>
+#include <helper_cuda.h>
 /*
 */
 
