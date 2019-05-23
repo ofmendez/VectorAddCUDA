@@ -1,3 +1,4 @@
+%%cu
 /**
  * Copyright 1993-2015 NVIDIA Corporation.  All rights reserved.
  *
@@ -21,6 +22,9 @@
 
 // For the CUDA runtime routines (prefixed with "cuda_")
 #include <cuda_runtime.h>
+#include <cuda_helper.h>
+/*
+*/
 
 /**
  * CUDA Kernel Device code
@@ -29,14 +33,17 @@
  * number of elements numElements.
  */
 __global__ void
-vectorAdd(const float *A, const float *B, float *C, int numElements)
+vectorAdd(const float *A, const float *B, float *C, int numElements, int operaciones)
 {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (i < numElements)
-    {
-        C[i] = A[i] + B[i];
+    
+    for(int j = 0; j < operaciones; j++){
+        int i = ((blockDim.x * blockIdx.x + threadIdx.x)*operaciones) + j;
+        if (i < numElements)
+        {
+            C[i] = A[i] + B[i];
+        }
     }
+    
 }
 
 /**
@@ -47,9 +54,19 @@ main(void)
 {
     // Error code to check return values for CUDA calls
     cudaError_t err = cudaSuccess;
+    int dev = 0;
+    cudaSetDevice(dev);
+    cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, dev);
+    int threadsPerBlock = _ConvertSMVer2Cores(deviceProp.major, deviceProp.minor);
+    threadsPerBlock = threadsPerBlock*2;
+
+    int blocksPerGrid =   deviceProp.multiProcessorCount;
+    
 
     // Print the vector length to be used, and compute its size
-    int numElements = 50000;
+    int numElements = 5000;
+    int operacionPorHilo = numElements>(blocksPerGrid*threadsPerBlock)?((numElements/blocksPerGrid*threadsPerBlock)+1):1;
     size_t size = numElements * sizeof(float);
     printf("[Vector addition of %d elements]\n", numElements);
 
@@ -103,12 +120,13 @@ main(void)
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to allocate device vector C (error code %s)!\n", cudaGetErrorString(err));
+
         exit(EXIT_FAILURE);
     }
 
     // Copy the host input vectors A and B in host memory to the device input vectors in
     // device memory
-    printf("Copy input data from the host memory to the CUDA device\n");
+    
     err = cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
 
     if (err != cudaSuccess)
@@ -126,10 +144,12 @@ main(void)
     }
 
     // Launch the Vector Add CUDA Kernel
-    int threadsPerBlock = 256;
-    int blocksPerGrid =(numElements + threadsPerBlock - 1) / threadsPerBlock;
+
+/*int cantidadCores = _ConvertSMVer2Cores(deviceProp.major, deviceProp.minor) *
+               deviceProp.multiProcessorCount;*/
+    
     printf("CUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid, threadsPerBlock);
-    vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, d_B, d_C, numElements);
+    vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, d_B, d_C, numElements,operacionPorHilo);
     err = cudaGetLastError();
 
     if (err != cudaSuccess)
@@ -145,6 +165,7 @@ main(void)
 
     if (err != cudaSuccess)
     {
+        printf("device_c%f, host_c%f\n", *d_C, *h_C);
         fprintf(stderr, "Failed to copy vector C from device to host (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
@@ -155,6 +176,7 @@ main(void)
         if (fabs(h_A[i] + h_B[i] - h_C[i]) > 1e-5)
         {
             fprintf(stderr, "Result verification failed at element %d!\n", i);
+            fprintf(stderr, " esperado: %f, tenemos: %f\n", (h_A[i] + h_B[i]), h_C[i]);
             exit(EXIT_FAILURE);
         }
     }
