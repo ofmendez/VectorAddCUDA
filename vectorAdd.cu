@@ -1,5 +1,5 @@
-%%cu
 /**
+%%cu
  * Copyright 1993-2015 NVIDIA Corporation.  All rights reserved.
  *
  * Please refer to the NVIDIA end user license agreement (EULA) associated
